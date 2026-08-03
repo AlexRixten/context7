@@ -44,6 +44,20 @@ describe("fetchLibraryContext", () => {
     expect(result.data).toContain("Error fetching library context");
   });
 
+  test("flags an empty documentation body as an error", async () => {
+    // A 200 with no body means no docs were retrieved (often an invalid or
+    // not-yet-finalized library), so the caller must see it as a failure.
+    stubFetch({
+      ok: true,
+      status: 200,
+      text: async () => "",
+    });
+
+    const result = await fetchLibraryContext({ query: "q", libraryId: "/vercel/next.js" });
+    expect(result.isError).toBe(true);
+    expect(result.data).toContain("Documentation not found or not finalized");
+  });
+
   test("does not flag a successful documentation response", async () => {
     stubFetch({
       ok: true,

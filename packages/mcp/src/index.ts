@@ -201,6 +201,9 @@ IMPORTANT: Do not call this tool more than 3 times per question. If you cannot f
               text,
             },
           ],
+          // An API failure is a tool execution error; an empty result set is a
+          // legitimate search outcome, so it stays a success.
+          ...(searchResponse.error ? { isError: true } : {}),
         };
       }
 
