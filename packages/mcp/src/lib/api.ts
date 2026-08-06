@@ -6,23 +6,36 @@ import { readFileSync } from "fs";
 import tls from "tls";
 
 /**
+ * Codes the API returns on a 404 when the lookup ran but matched nothing.
+ * The call did not fail, so these are not tool execution errors.
+ */
+const EMPTY_RESULT_CODES = new Set(["no_libraries_found", "no_relevant_snippets"]);
+
+/**
  * Parses error response from the Context7 API
  * Extracts the server's error message, falling back to status-based messages if parsing fails
  * @param response The fetch Response object
  * @param apiKey Optional API key (used for fallback messages)
- * @returns Error message string
+ * @returns The message to show, and whether it represents a real failure
  */
-async function parseErrorResponse(response: Response, apiKey?: string): Promise<string> {
+async function parseErrorResponse(
+  response: Response,
+  apiKey?: string
+): Promise<{ message: string; isError: boolean }> {
   try {
-    const json = (await response.json()) as { message?: string };
+    const json = (await response.json()) as { message?: string; error?: string };
     if (json.message) {
-      return json.message;
+      return { message: json.message, isError: !EMPTY_RESULT_CODES.has(json.error ?? "") };
     }
   } catch {
     // JSON parsing failed, fall through to default
   }
 
-  const status = response.status;
+  // An unparseable body is always a real failure.
+  return { message: statusMessage(response.status, apiKey), isError: true };
+}
+
+function statusMessage(status: number, apiKey?: string): string {
   if (status === 429) {
     return apiKey
       ? "Rate limited or quota exceeded. Upgrade your plan at https://context7.com/plans for higher limits."
@@ -122,16 +135,16 @@ export async function searchLibraries(
     const response = await fetch(url, { headers });
     readPromptSignal(response, context);
     if (!response.ok) {
-      const errorMessage = await parseErrorResponse(response, context.apiKey);
-      console.error(errorMessage);
-      return { results: [], error: errorMessage };
+      const { message, isError } = await parseErrorResponse(response, context.apiKey);
+      if (isError) console.error(message);
+      return { results: [], error: message, isError };
     }
     const searchData = await response.json();
     return searchData as SearchResponse;
   } catch (error) {
     const errorMessage = `Error searching libraries: ${error}`;
     console.error(errorMessage);
-    return { results: [], error: errorMessage };
+    return { results: [], error: errorMessage, isError: true };
   }
 }
 
@@ -155,9 +168,9 @@ export async function fetchLibraryContext(
     const response = await fetch(url, { headers });
     readPromptSignal(response, context);
     if (!response.ok) {
-      const errorMessage = await parseErrorResponse(response, context.apiKey);
-      console.error(errorMessage);
-      return { data: errorMessage, isError: true };
+      const { message, isError } = await parseErrorResponse(response, context.apiKey);
+      if (isError) console.error(message);
+      return { data: message, isError };
     }
 
     const text = await response.text();

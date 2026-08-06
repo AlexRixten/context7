@@ -16,6 +16,8 @@ export interface SearchResult {
 
 export interface SearchResponse {
   error?: string;
+  /** True when `error` is a real failure rather than a search that matched nothing. */
+  isError?: boolean;
   results: SearchResult[];
   searchFilterApplied?: boolean;
 }
